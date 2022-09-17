@@ -215,10 +215,10 @@ Message Testing:
   - 00 xx 00 00 00 00 00 00 - ?
   - 00 00 xx 00 00 00 00 00 - ?
   - 00 00 00 xx 00 00 00 00 - ?
-  - 00 00 00 00 xx 00 00 00 - tach in 10 degrees per second.  xx*32 truncated to 50.
-      example 1: 87 (0x57) => 87 * 32 = 2785 => 2750 rpm
-      example 2: 118 (0x76) => 118 * 32 = 3776 => 3750 rpm
-      example 3: 99 => 99 * 32 = 3168 => 3150 rpm
+  - 00 00 00 00 xx 00 00 00 - tach in 32 rpm intervals.  xx*32 truncated to 50 rpm.
+      example 1: 87 (0x57) => floor50(87 * 32) = floor50(2785) => 2750 rpm
+      example 2: 118 (0x76) => floor50(118 * 32) = floor50(3776) => 3750 rpm
+      example 3: 99 => floor50(99 * 32) = floor50(3168) => 3150 rpm
   - 00 00 00 00 00 xx 00 00 - ?
   - 00 00 00 00 00 00 xx 00 - ?
   - 00 00 00 00 00 00 00 xx - ?
