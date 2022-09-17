@@ -3,6 +3,8 @@
 canbus speed: 250 kbps
 canbus clock: 16 MHz
 
+Note: I was also able to get similar (identical?) data by sniffing at 125 kbps / 8MHz. 
+
 Startup (sniffed frames)
 14:21:22.574 -> > 0x18EEFF00 => 00 00 00 00 00 00 00 00
 14:21:22.606 -> > 0x18FEF200 => 00 00 FF FF FF FF 00 FF
