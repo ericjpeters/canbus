@@ -91,13 +91,15 @@ The ECU has a 60-pin connector, which appears to have the following pinouts:
 44. unknown
 45. unknown
 46. SIGRTN ?
+	I think this is some sort of protected ground.   See 53.
 47. Canbus high
 48. Canbus low
 49. unknown
 50. unknown
 51. NCS ?
 52. GSS ? 
-53. TPS ?
+53. Throttle position sensor
+	* This is a 1k-5k variable resistor (+/- 1k).   I'm using a 502 potentiometer with a 510 ohm bias resistor.  Pin 46 to lead 1; pin 53 to center/lead 2; and pin 55 to a 510ohm resistor then to lead 3.  Tested resistance is between 0.515 kohm and 5.15 kohm.   
 54. MAP ?
 55. Power +5v
 56. unknown
@@ -128,7 +130,95 @@ canbus clock: 16 MHz
 
 Note: I was also able to get similar (identical?) data by sniffing at 125 kbps / 8MHz. 
 
-## Sniffed frames at startup
+## Message Testing
+  Key: 
+    * Is the sniffed base
+    + is my specific guesses
+    - is my resulting analysis based on test frames sent
+    
+  Note: often I will cause some sort of error state which breaks the responsiveness of the ECU/Speedometer.  Therefore, all analysis are done at startup as well as injected dynamically.
+
+### 0x 0CF0 0400 - tachometer
+
+```
+* FF FF FF 00 00 FF FF FF - ?
++ 00 00 00 00 00 00 00 00 - ?
++ 12 34 56 78 87 65 43 21
+	all values are decimal (not hex), tach reads 2750 rpm
++ 0c 22 38 4e 57 41 2b 15
+	hex (from above), tach reads 2750 rpm
++ fe dc ba 98 76 54 32 10
+	tach reads 3750 rpm
+
+- xx 00 00 00 00 00 00 00 - ?
+- 00 xx 00 00 00 00 00 00 - ?
+- 00 00 xx 00 00 00 00 00 - ?
+- 00 00 00 xx 00 00 00 00 - ?
+- 00 00 00 00 xx 00 00 00 - tachometer RPMs 
+	tach in 32 rpm intervals.  xx*32 truncated to 50 rpm.
+	example 1: 87 (0x57) => floor50(87 * 32) = floor50(2785) => 2750 rpm
+	example 2: 118 (0x76) => floor50(118 * 32) = floor50(3776) => 3750 rpm
+	example 3: 99 => floor50(99 * 32) = floor50(3168) => 3150 rpm
+- 00 00 00 00 00 xx 00 00 - ?
+- 00 00 00 00 00 00 xx 00 - ?
+- 00 00 00 00 00 00 00 xx - ?
+```
+
+### 0x 18F0 0500 - engine codes?  I got several messages to make the engine light stay off
+```
+* FF FF FF FF 20 2D FF FF - ?
++ 00 00 00 00 00 00 00 00 - check engine light is off.
+
+- xx 00 00 00 00 00 00 00 - ?
+- 00 xx 00 00 00 00 00 00 - ?
+- 00 00 xx 00 00 00 00 00 - ?
+- 00 00 00 xx 00 00 00 00 - ?
+- 00 00 00 00 xx 00 00 00 - ?
+- 00 00 00 00 00 xx 00 00 - ?
+- 00 00 00 00 00 00 xx 00 - ?
+- 00 00 00 00 00 00 00 xx - ?
+```
+
+### * 0x 18FE F100 - speedometer + engine codes?
+```
+* 3F 00 00 FF FF FF FF FF - check engine light is on.
++ 3F 00 00 00 00 00 00 00 - check engine light is off.
+
+- xx 00 00 00 00 00 00 00 - ?
+- 00 xx 00 00 00 00 00 00 - ?
+- 00 00 xx 00 00 00 00 00 - speedometer speed
+	set speed to xx km/h.  0x00-0xFA (0xFB-0xFF rendered as 0 km/h)
+- 00 00 00 xx 00 00 00 00 - ?
+- 00 00 00 00 xx 00 00 00 - ?
+- 00 00 00 00 00 xx 00 00 - ?
+- 00 00 00 00 00 00 xx 00 - ?
+- 00 00 00 00 00 00 00 xx - ?
+```
+
+### * 0x 18FE F200 - ?
+```
+* 00 00 FF FF FF FF 00 FF - ?
++ 00 00 00 00 00 00 00 00 - ?
+
+- xx 00 00 00 00 00 00 00 - ?
+- 00 xx 00 00 00 00 00 00 - ?
+- 00 00 xx 00 00 00 00 00 - ?
+- 00 00 00 xx 00 00 00 00 - ?
+- 00 00 00 00 xx 00 00 00 - ?
+- 00 00 00 00 00 xx 00 00 - ?
+- 00 00 00 00 00 00 xx 00 - ?
+- 00 00 00 00 00 00 00 xx - ?
+```
+
+## Notes:
+
+Mileage is 10461 (0x28DD).   I'm not seeing these values in the sniffed frames. I'm not sure the mileage / other settings are stored on the speedometer or the ECU. 
+
+The check-engine lamp appears to be stateful.  Once it's on, it seems that only a power-cycle turns it off. 
+
+## Sniffed frames
+
+### Startup
 ```
 14:21:22.574 -> > 0x18EEFF00 => 00 00 00 00 00 00 00 00
 14:21:22.606 -> > 0x18FEF200 => 00 00 FF FF FF FF 00 FF
@@ -321,89 +411,3 @@ Note: I was also able to get similar (identical?) data by sniffing at 125 kbps /
 14:21:30.601 -> > 0x18F00500 => FF FF FF FF 20 2D FF FF
 14:21:30.634 -> > 0x18F00500 => FF FF FF FF 20 2D FF FF
 ```
-
-## Message Testing
-  Key: 
-    * Is the sniffed base
-    + is my specific guesses
-    - is my resulting analysis based on test frames sent
-    
-  Note: often I will cause some sort of error state which breaks the responsiveness of the ECU/Speedometer.  Therefore, all analysis are done at startup as well as injected dynamically.
-
-### 0x 0CF0 0400 - tachometer
-
-```
-* FF FF FF 00 00 FF FF FF - ?
-+ 00 00 00 00 00 00 00 00 - ?
-+ 12 34 56 78 87 65 43 21
-	all values are decimal (not hex), tach reads 2750 rpm
-+ 0c 22 38 4e 57 41 2b 15
-	hex (from above), tach reads 2750 rpm
-+ fe dc ba 98 76 54 32 10
-	tach reads 3750 rpm
-
-- xx 00 00 00 00 00 00 00 - ?
-- 00 xx 00 00 00 00 00 00 - ?
-- 00 00 xx 00 00 00 00 00 - ?
-- 00 00 00 xx 00 00 00 00 - ?
-- 00 00 00 00 xx 00 00 00 - tachometer RPMs 
-	tach in 32 rpm intervals.  xx*32 truncated to 50 rpm.
-	example 1: 87 (0x57) => floor50(87 * 32) = floor50(2785) => 2750 rpm
-	example 2: 118 (0x76) => floor50(118 * 32) = floor50(3776) => 3750 rpm
-	example 3: 99 => floor50(99 * 32) = floor50(3168) => 3150 rpm
-- 00 00 00 00 00 xx 00 00 - ?
-- 00 00 00 00 00 00 xx 00 - ?
-- 00 00 00 00 00 00 00 xx - ?
-```
-
-### 0x 18F0 0500 - engine codes?  I got several messages to make the engine light stay off
-```
-* FF FF FF FF 20 2D FF FF - ?
-+ 00 00 00 00 00 00 00 00 - check engine light is off.
-
-- xx 00 00 00 00 00 00 00 - ?
-- 00 xx 00 00 00 00 00 00 - ?
-- 00 00 xx 00 00 00 00 00 - ?
-- 00 00 00 xx 00 00 00 00 - ?
-- 00 00 00 00 xx 00 00 00 - ?
-- 00 00 00 00 00 xx 00 00 - ?
-- 00 00 00 00 00 00 xx 00 - ?
-- 00 00 00 00 00 00 00 xx - ?
-```
-
-### * 0x 18FE F100 - speedometer + engine codes?
-```
-* 3F 00 00 FF FF FF FF FF - check engine light is on.
-+ 3F 00 00 00 00 00 00 00 - check engine light is off.
-
-- xx 00 00 00 00 00 00 00 - ?
-- 00 xx 00 00 00 00 00 00 - ?
-- 00 00 xx 00 00 00 00 00 - speedometer speed
-	set speed to xx km/h.  0x00-0xFA (0xFB-0xFF rendered as 0 km/h)
-- 00 00 00 xx 00 00 00 00 - ?
-- 00 00 00 00 xx 00 00 00 - ?
-- 00 00 00 00 00 xx 00 00 - ?
-- 00 00 00 00 00 00 xx 00 - ?
-- 00 00 00 00 00 00 00 xx - ?
-```
-
-### * 0x 18FE F200 - ?
-```
-* 00 00 FF FF FF FF 00 FF - ?
-+ 00 00 00 00 00 00 00 00 - ?
-
-- xx 00 00 00 00 00 00 00 - ?
-- 00 xx 00 00 00 00 00 00 - ?
-- 00 00 xx 00 00 00 00 00 - ?
-- 00 00 00 xx 00 00 00 00 - ?
-- 00 00 00 00 xx 00 00 00 - ?
-- 00 00 00 00 00 xx 00 00 - ?
-- 00 00 00 00 00 00 xx 00 - ?
-- 00 00 00 00 00 00 00 xx - ?
-```
-
-## Notes:
-
-Mileage is 10461 (0x28DD).   I'm not seeing these values in the sniffed frames. I'm not sure the mileage / other settings are stored on the speedometer or the ECU. 
-
-The check-engine lamp appears to be stateful.  Once it's on, it seems that only a power-cycle turns it off. 
