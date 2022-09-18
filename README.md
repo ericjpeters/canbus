@@ -1,11 +1,135 @@
 # canbus sniffing a 2013 victory hammer
-```
+
+## Overview
+
+I had a 2013 Victory Hammer 8-Ball - excellent bike.  Unfortunately, it died and I parted it out.  I was able to sell the vast majority of the parts except for the ECU and Speedometer.  I decided I wanted to use the Speedometer for my own purposes, but found the interface used Canbus to trigger the majority of the features of the speedometer.  This led me to try and figure out exactly how it worked.  My research and experimentation is documented here.
+
+Please note: everything on here is from my research.  It may be wrong, it likely will have errors, and it probably will result in breaking my ECU and/or speedometer.  Anything you do with this is a risk to your motorcycle and will likely result in bad things happening.  Use this information at your own risk.
+
+## Hardware
+
+The power supply is a PC power supply which provides various voltage outputs: +5v +12v as well as a couple others (which I'm not currently using).
+
+The speedometer has a 16 pin connector on the back, which appears to have the following pinouts:
+
+1. CAN high [yellow]
+2. CAN low [green]
+3. Switched power +12v [pink]
+4. Constant power +12v [orange]
+5. Ground [black/white]
+6. Flasher light [blue/purple]
+	* floating => light off
+	* +5v => light on
+7. No connection
+8. High beam light [dark green]
+	* floating => light off
+	* +5v => light on
+9. Neutral light [black/pink]
+	* floating => light off
+	* Ground => light on
+10. Oil pressure sensor [black/brown]
+	* floating => oil pressure ok
+	* Ground => display shows low oil
+11. No connection
+12. Mode switch [white/black]
+	* floating => button not pressed
+	* Ground => button pressed
+13. Fuel light [black/light green]
+	* unknown.   I think it needs to be a variable resistor to ground, but haven't figured it out yet 
+14. Cruise control light [white/brown]
+	* floating => light off
+	* Ground => light on
+15. Air temperature [orange/light blue]
+	* unknown.   I think it needs to be a variable resistor to ground, but haven't figured it out yet 
+16. No connection
+
+The ECU has a 60-pin connector, which appears to have the following pinouts:
+
+1. Power +12v
+2. No connection
+3. Ignition coil A ?
+4. Ignition coil B ? 
+5. unknown
+6. Idle air control 1 ?
+7. Idle air control 2 ?
+8. Idle air control 3 ? 
+9. Idle air control 4 ?
+10. unknown
+11. Power +12v
+12. Ground
+13. unknown
+14. unknown
+15. unknown
+16. unknown
+17. unknown
+18. FEPS ?
+19. Purge valve ?
+20. unknown
+21. Speedometer switched power ?
+22. Tachometer switched power ?
+23. neutral indicator ?
+24. overdrive indicator ?
+25. fuel injector 1 ?
+26. fuel injector 2 ?
+27. unknown
+28. Fuel pump ?
+29. unknown
+30. unknown
+31. Power +12v
+32. unknown
+33. Ground
+34. Power +12v
+35. unknown
+36. O2 sensor 1 ?
+37. O2 sensor 2 ?
+38. IAT ?
+39. CHT ?
+40. TOS ?
+41. Ground
+42. VSSH ?
+43. unknown
+44. unknown
+45. unknown
+46. SIGRTN ?
+47. Canbus high
+48. Canbus low
+49. unknown
+50. unknown
+51. NCS ?
+52. GSS ? 
+53. TPS ?
+54. MAP ?
+55. Power +5v
+56. unknown
+57. Crank Position + ?
+58. Crank Position - ?
+59. unknown
+60. KAPWR ?
+
+At this time, most wires are floating, with the exception of the following:
+
+* +12v Power
+	* ECU-1, ECU-11, ECU-31, ECU-34, S-3, S-4
+* +5v Power
+	* ECU-55
+* Ground
+	* ECU-12, ECU-33, ECU-41, S-5
+* Canbus
+	* ECU-47, ECU-48, S-1, S-2
+
+The canbus connections also feed into a canbus-shield for an arduino.  No other arduino connections are currently used.
+
+The arduino code will be added to this repo at a later time.
+
+## General settings
+
 canbus speed: 250 kbps
 canbus clock: 16 MHz
 
 Note: I was also able to get similar (identical?) data by sniffing at 125 kbps / 8MHz. 
 
-Startup (sniffed frames)
+## Sniffed frames at startup
+```
 14:21:22.574 -> > 0x18EEFF00 => 00 00 00 00 00 00 00 00
 14:21:22.606 -> > 0x18FEF200 => 00 00 FF FF FF FF 00 FF
 14:21:22.672 -> > 0x18FEF100 => 3F 00 00 FF FF FF FF FF
@@ -196,8 +320,9 @@ Startup (sniffed frames)
 14:21:30.535 -> > 0x0CF00400 => FF FF FF 00 00 FF FF FF
 14:21:30.601 -> > 0x18F00500 => FF FF FF FF 20 2D FF FF
 14:21:30.634 -> > 0x18F00500 => FF FF FF FF 20 2D FF FF
+```
 
-Message Testing:
+## Message Testing
   Key: 
     * Is the sniffed base
     + is my specific guesses
@@ -205,58 +330,80 @@ Message Testing:
     
   Note: often I will cause some sort of error state which breaks the responsiveness of the ECU/Speedometer.  Therefore, all analysis are done at startup as well as injected dynamically.
 
-* 0x 0CF0 0400 - tachometer
-  * FF FF FF 00 00 FF FF FF - ?
-  + 00 00 00 00 00 00 00 00 - ?
-  + 12 34 56 78 87 65 43 21 - all values are decimal (not hex), tach reads 2750 rpm
-  + 0c 22 38 4e 57 41 2b 15 - hex (from above), tach reads 2750 rpm
-  + fe dc ba 98 76 54 32 10 - tach reads 3750 rpm
-  - xx 00 00 00 00 00 00 00 - ?
-  - 00 xx 00 00 00 00 00 00 - ?
-  - 00 00 xx 00 00 00 00 00 - ?
-  - 00 00 00 xx 00 00 00 00 - ?
-  - 00 00 00 00 xx 00 00 00 - tach in 32 rpm intervals.  xx*32 truncated to 50 rpm.
-      example 1: 87 (0x57) => floor50(87 * 32) = floor50(2785) => 2750 rpm
-      example 2: 118 (0x76) => floor50(118 * 32) = floor50(3776) => 3750 rpm
-      example 3: 99 => floor50(99 * 32) = floor50(3168) => 3150 rpm
-  - 00 00 00 00 00 xx 00 00 - ?
-  - 00 00 00 00 00 00 xx 00 - ?
-  - 00 00 00 00 00 00 00 xx - ?
-  
+### 0x 0CF0 0400 - tachometer
 
-* 0x 18F0 0500 - engine codes?  I got several messages to make the engine light stay off (see 0x18FEF100)
-  * FF FF FF FF 20 2D FF FF - ?
-  + 00 00 00 00 00 00 00 00 - no engine light
-  - xx 00 00 00 00 00 00 00 - ?
-  - 00 xx 00 00 00 00 00 00 - ?
-  - 00 00 xx 00 00 00 00 00 - ?
-  - 00 00 00 xx 00 00 00 00 - ?
-  - 00 00 00 00 xx 00 00 00 - ?
-  - 00 00 00 00 00 xx 00 00 - ?
-  - 00 00 00 00 00 00 xx 00 - ?
-  - 00 00 00 00 00 00 00 xx - ?
-
-* 0x 18FE F100 - speedometer + engine codes?
-  * 3F 00 00 FF FF FF FF FF - engine light is on.  It appears that once the light is on, it stays on until the next power cycle.
-  + 3F 00 00 00 00 00 00 00 - engine light is off.
-  - xx 00 00 00 00 00 00 00 - ?
-  - 00 xx 00 00 00 00 00 00 - ?
-  - 00 00 xx 00 00 00 00 00 - set speed to xx km/h.  0x00-0xFA (0xFB-0xFF rendered as 0 km/h)
-  - 00 00 00 xx 00 00 00 00 - ?
-  - 00 00 00 00 xx 00 00 00 - ?
-  - 00 00 00 00 00 xx 00 00 - ?
-  - 00 00 00 00 00 00 xx 00 - ?
-  - 00 00 00 00 00 00 00 xx - ?
-
-* 0x 18FE F200 - ?
-  * 00 00 FF FF FF FF 00 FF - ?
-  + 00 00 00 00 00 00 00 00 - ?
-  - xx 00 00 00 00 00 00 00 - ?
-  - 00 xx 00 00 00 00 00 00 - ?
-  - 00 00 xx 00 00 00 00 00 - ?
-  - 00 00 00 xx 00 00 00 00 - ?
-  - 00 00 00 00 xx 00 00 00 - ?
-  - 00 00 00 00 00 xx 00 00 - ?
-  - 00 00 00 00 00 00 xx 00 - ?
-  - 00 00 00 00 00 00 00 xx - ?
 ```
+* FF FF FF 00 00 FF FF FF - ?
++ 00 00 00 00 00 00 00 00 - ?
++ 12 34 56 78 87 65 43 21
+	all values are decimal (not hex), tach reads 2750 rpm
++ 0c 22 38 4e 57 41 2b 15
+	hex (from above), tach reads 2750 rpm
++ fe dc ba 98 76 54 32 10
+	tach reads 3750 rpm
+
+- xx 00 00 00 00 00 00 00 - ?
+- 00 xx 00 00 00 00 00 00 - ?
+- 00 00 xx 00 00 00 00 00 - ?
+- 00 00 00 xx 00 00 00 00 - ?
+- 00 00 00 00 xx 00 00 00 - tachometer RPMs 
+	tach in 32 rpm intervals.  xx*32 truncated to 50 rpm.
+	example 1: 87 (0x57) => floor50(87 * 32) = floor50(2785) => 2750 rpm
+	example 2: 118 (0x76) => floor50(118 * 32) = floor50(3776) => 3750 rpm
+	example 3: 99 => floor50(99 * 32) = floor50(3168) => 3150 rpm
+- 00 00 00 00 00 xx 00 00 - ?
+- 00 00 00 00 00 00 xx 00 - ?
+- 00 00 00 00 00 00 00 xx - ?
+```
+
+### 0x 18F0 0500 - engine codes?  I got several messages to make the engine light stay off
+```
+* FF FF FF FF 20 2D FF FF - ?
++ 00 00 00 00 00 00 00 00 - check engine light is off.
+
+- xx 00 00 00 00 00 00 00 - ?
+- 00 xx 00 00 00 00 00 00 - ?
+- 00 00 xx 00 00 00 00 00 - ?
+- 00 00 00 xx 00 00 00 00 - ?
+- 00 00 00 00 xx 00 00 00 - ?
+- 00 00 00 00 00 xx 00 00 - ?
+- 00 00 00 00 00 00 xx 00 - ?
+- 00 00 00 00 00 00 00 xx - ?
+```
+
+### * 0x 18FE F100 - speedometer + engine codes?
+```
+* 3F 00 00 FF FF FF FF FF - check engine light is on.
++ 3F 00 00 00 00 00 00 00 - check engine light is off.
+
+- xx 00 00 00 00 00 00 00 - ?
+- 00 xx 00 00 00 00 00 00 - ?
+- 00 00 xx 00 00 00 00 00 - speedometer speed
+	set speed to xx km/h.  0x00-0xFA (0xFB-0xFF rendered as 0 km/h)
+- 00 00 00 xx 00 00 00 00 - ?
+- 00 00 00 00 xx 00 00 00 - ?
+- 00 00 00 00 00 xx 00 00 - ?
+- 00 00 00 00 00 00 xx 00 - ?
+- 00 00 00 00 00 00 00 xx - ?
+```
+
+### * 0x 18FE F200 - ?
+```
+* 00 00 FF FF FF FF 00 FF - ?
++ 00 00 00 00 00 00 00 00 - ?
+
+- xx 00 00 00 00 00 00 00 - ?
+- 00 xx 00 00 00 00 00 00 - ?
+- 00 00 xx 00 00 00 00 00 - ?
+- 00 00 00 xx 00 00 00 00 - ?
+- 00 00 00 00 xx 00 00 00 - ?
+- 00 00 00 00 00 xx 00 00 - ?
+- 00 00 00 00 00 00 xx 00 - ?
+- 00 00 00 00 00 00 00 xx - ?
+```
+
+## Notes:
+
+Mileage is 10461 (0x28DD).   I'm not seeing these values in the sniffed frames. I'm not sure the mileage / other settings are stored on the speedometer or the ECU. 
+
+The check-engine lamp appears to be stateful.  Once it's on, it seems that only a power-cycle turns it off. 
